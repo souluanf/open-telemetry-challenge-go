@@ -1,0 +1,63 @@
+services:
+  service-a:
+    container_name: service-a
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service_a
+    ports:
+      - "8080:8080"
+    depends_on:
+      - jaeger
+      - zipkin
+      - prometheus
+      - collector
+
+  service-b:
+    container_name: service-b
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service_b
+    ports:
+      - "8081:8081"
+    depends_on:
+      - jaeger
+      - zipkin
+      - prometheus
+      - collector
+
+  jaeger:
+    image: jaegertracing/all-in-one
+    restart: always
+    ports:
+      - "16686:16686"
+      - "14268"
+      - "14250"
+
+  zipkin:
+    image: openzipkin/zipkin:latest
+    restart: always
+    ports:
+      - "9411:9411"
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    restart: always
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  collector:
+    image: otel/opentelemetry-collector
+    restart: always
+    command: ["--config=/etc/open-telemetry.yaml"]
+    volumes:
+      - ./config/open-telemetry.yaml:/etc/open-telemetry.yaml
+    ports:
+      - "1888:1888"
+      - "8888:8888"
+      - "8889:8889"
+      - "13133:13133"
+      - "4317:4317"
+      - "55679:55679"
