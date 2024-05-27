@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/render"
@@ -23,10 +24,9 @@ func (req *CepRequest) Bind(r *http.Request) error {
 	if req.Cep == "" {
 		return errors.New("cep field is missing")
 	}
-
 	req.Cep = strings.Replace(req.Cep, "-", "", -1)
-
-	if len(req.Cep) != 8 {
+	match, _ := regexp.MatchString(`^\d{8}$`, req.Cep)
+	if !match {
 		return errors.New("invalid zipcode")
 	}
 	return nil
