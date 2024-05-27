@@ -42,12 +42,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cepResponse, err := getCepResponse(ctx, cep)
-	if err != nil {
-		handleError(w, "Error fetching zipcode data", 500, err)
-		return
-	}
-
-	if cepResponse.Erro == "true" {
+	if err != nil || cepResponse.Erro == "true" {
 		handleError(w, "can not find zipcode", 404, nil)
 		return
 	}
@@ -64,8 +59,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 
 func validateCep(cep string, w http.ResponseWriter) bool {
 	if len(cep) != 8 {
-		w.WriteHeader(422)
-		_, _ = w.Write([]byte("invalid zipcode"))
+		handleError(w, "invalid zipcode", 422, fmt.Errorf("invalid zipcode"))
 		return false
 	}
 	return true
@@ -77,7 +71,6 @@ func getCepResponse(ctx context.Context, cep string) (ViaCepResponse, error) {
 	if err != nil {
 		return ViaCepResponse{}, err
 	}
-
 	var cepResponse ViaCepResponse
 	err = json.Unmarshal(respCep, &cepResponse)
 	return cepResponse, err
@@ -113,7 +106,12 @@ func handleError(w http.ResponseWriter, message string, code int, err error) {
 		fmt.Printf("ERROR: %s\n", err.Error())
 	}
 	w.WriteHeader(code)
-	_, _ = w.Write([]byte(message))
+	errorResponse := map[string]interface{}{
+		"statuscode": code,
+		"message":    message,
+	}
+	response, _ := json.Marshal(errorResponse)
+	_, _ = w.Write(response)
 }
 
 func fetchData(c context.Context, url string) (response []byte, err error) {

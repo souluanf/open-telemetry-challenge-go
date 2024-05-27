@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -36,11 +37,7 @@ var tracer = otel.Tracer("open-telemetry-challenge-go")
 func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	data := &CepRequest{}
 	if err := render.Bind(r, data); err != nil {
-		w.WriteHeader(422)
-		_, err := w.Write([]byte(err.Error()))
-		if err != nil {
-			return
-		}
+		writeErrorResponse(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	cep := data.Cep
@@ -52,31 +49,46 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	url := "http://service-b:8081/" + cep
-	response, err := fetchData(ctx, url)
+	statusCode, response, err := fetchData(ctx, url)
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err.Error())
-		w.WriteHeader(500)
-		_, err := w.Write([]byte("internal server error"))
-		if err != nil {
-			return
-		}
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	w.WriteHeader(200)
+	w.WriteHeader(statusCode)
 	_, err = w.Write(response)
 	if err != nil {
 		return
 	}
 }
 
-func fetchData(c context.Context, url string) (response []byte, err error) {
-	res, _ := otelhttp.Get(c, url)
-	body, err := io.ReadAll(res.Body)
-	_ = res.Body.Close()
+func fetchData(c context.Context, url string) (int, []byte, error) {
+	res, err := otelhttp.Get(c, url)
 	if err != nil {
-		return nil, err
+		return http.StatusInternalServerError, nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("ERROR: %s\n", err.Error())
+		}
+	}(res.Body)
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return res.StatusCode, nil, err
 	}
 
-	return body, nil
+	return res.StatusCode, body, nil
+}
+
+func writeErrorResponse(w http.ResponseWriter, code int, message string) {
+	errorResponse := map[string]interface{}{
+		"statuscode": code,
+		"message":    message,
+	}
+	response, _ := json.Marshal(errorResponse)
+	w.WriteHeader(code)
+	_, _ = w.Write(response)
 }
